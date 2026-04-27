@@ -6,12 +6,12 @@ Backup and restore tool for Hermes Agent + OpenClaw installations.
 
 ## Features
 
-- **Incremental-aware discovery**: Backs up `~/work/hermes-agent`, `~/work/openclaw`, `~/.hermes`, `~/.openclaw`, systemd units, and more
+- **Incremental-aware discovery**: Backs up `~/.hermes`, `~/.openclaw`, systemd units, and more
 - **SQLite-safe**: Uses `sqlite3 .backup` for live database copies
 - **Compressed archives**: `tar.zst` format with zstd compression
 - **Google Drive upload**: Via `rclone` integration
 - **Cross-platform home dir**: Uses `dirs` crate — no hardcoded paths
-- **Auto workspace discovery**: Scans `~/.openclaw/workspace*` dynamically
+- **Auto workspace discovery**: Users can add workspace paths via `[paths] extra` in the config file
 
 ## Install
 
@@ -85,6 +85,12 @@ Configure `~/.config/hbackup/config.toml`:
 destination = "user@server:/backups/"  # scp/rsync
 drive_remote = "gdrive"                  # Google Drive remote name
 drive_folder = "backups/hermes"          # Google Drive folder
+
+[paths]
+# Additional directories to include in every backup
+extra = ["~/work/my-project"]
+# Directories to exclude entirely from every backup
+exclude = ["~/work/hermes-agent"]
 ```
 
 ## Cron Setup
@@ -107,18 +113,25 @@ destination = "user@backup-server:/backups/"
 # For Google Drive upload:
 drive_remote = "gdrive"
 drive_folder = "backups/hermes"
+
+[paths]
+# Extra directories to add to every backup (supports ~)
+extra = ["~/work/my-project", "~/documents/configs"]
+# Directories to exclude entirely from every backup (supports ~)
+exclude = ["~/work/hermes-agent"]
 ```
 
 ## What Gets Backed Up
 
 | Path | Description |
 |------|-------------|
-| `~/work/hermes-agent` | Hermes Agent source and config |
-| `~/work/openclaw` | OpenClaw workspace |
 | `~/.hermes` | Hermes state, logs, cache |
+| `~/work/openclaw` | OpenClaw workspace |
 | `~/.openclaw` | OpenClaw config, workspaces (auto-discovered) |
 | `~/.config/systemd/user/` | User systemd units |
 | SQLite databases | Copied safely via `sqlite3 .backup` |
+
+Extra paths can be added via the `[paths]` section of the config file.
 
 ## Open Source Notes
 
@@ -126,7 +139,7 @@ This tool was extracted from a personal setup. Before publishing:
 
 - All hardcoded paths removed (uses `dirs::home_dir()`)
 - Workspace names auto-discovered from `~/.openclaw/workspace*`
-- No user-specific paths remain
+- No user-specific paths remain; extra paths configurable via `[paths]` in `~/.config/hbackup/config.toml`
 
 ## License
 

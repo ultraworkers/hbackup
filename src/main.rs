@@ -91,6 +91,17 @@ enum Commands {
 #[derive(Deserialize)]
 struct Config {
     upload: Option<UploadConfig>,
+    paths: Option<PathsConfig>,
+}
+
+#[derive(Deserialize, Default, Clone)]
+struct PathsConfig {
+    /// Additional paths to include in every backup.
+    #[serde(default)]
+    extra: Vec<String>,
+    /// Paths to exclude from every backup (entire directory trees).
+    #[serde(default)]
+    exclude: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -103,12 +114,33 @@ struct UploadConfig {
     drive_folder: String,
 }
 
+fn expand_path(s: &str) -> PathBuf {
+    if let Some(rest) = s.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(s)
+}
+
+fn paths_config_to_vecs(pc: Option<PathsConfig>) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    match pc {
+        None => (Vec::new(), Vec::new()),
+        Some(pc) => (
+            pc.extra.iter().map(|s| expand_path(s)).collect(),
+            pc.exclude.iter().map(|s| expand_path(s)).collect(),
+        ),
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Backup { dry_run, excludes, output } => {
-            let opts = BackupOptions { dry_run, excludes, output };
+            let config = load_config();
+            let (extra_paths, exclude_paths) = paths_config_to_vecs(config.and_then(|c| c.paths));
+            let opts = BackupOptions { dry_run, excludes, output, extra_paths, exclude_paths };
             backup::run_backup(&opts)?;
         }
         Commands::Restore { archive, dry_run, force } => {
@@ -221,10 +253,15 @@ fn cmd_upload(archive: &PathBuf, destination: Option<&str>) -> Result<()> {
 }
 
 fn cmd_auto() -> Result<()> {
+    let config = load_config();
+    let (extra_paths, exclude_paths) =
+        paths_config_to_vecs(config.as_ref().and_then(|c| c.paths.clone()));
     let opts = BackupOptions {
         dry_run: false,
         excludes: vec![],
         output: None,
+        extra_paths,
+        exclude_paths,
     };
     let archive = backup::run_backup(&opts)?;
 

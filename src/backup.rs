@@ -14,6 +14,8 @@ pub struct BackupOptions {
     pub dry_run: bool,
     pub excludes: Vec<String>,
     pub output: Option<PathBuf>,
+    pub extra_paths: Vec<PathBuf>,
+    pub exclude_paths: Vec<PathBuf>,
 }
 
 pub fn run_backup(opts: &BackupOptions) -> Result<PathBuf> {
@@ -22,7 +24,7 @@ pub fn run_backup(opts: &BackupOptions) -> Result<PathBuf> {
 
     // Discover files
     eprintln!("Discovering files...");
-    let mut files = bp.discover(&opts.excludes);
+    let mut files = bp.discover(&opts.excludes, &opts.extra_paths, &opts.exclude_paths);
     files.extend(bp.discover_systemd_units());
     files.sort();
     files.dedup();

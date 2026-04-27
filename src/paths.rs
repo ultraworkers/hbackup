@@ -24,17 +24,41 @@ impl BackupPaths {
         Self { home }
     }
 
-    pub fn discover(&self, extra_excludes: &[String]) -> Vec<PathBuf> {
+    pub fn discover(
+        &self,
+        extra_excludes: &[String],
+        extra_paths: &[std::path::PathBuf],
+        exclude_paths: &[std::path::PathBuf],
+    ) -> Vec<PathBuf> {
         let mut specs = self.build_specs();
+
+        // Append user-configured extra paths as full scans
+        for ep in extra_paths {
+            specs.push(DirSpec {
+                path: ep.clone(),
+                excludes: vec![],
+                mode: ScanMode::Full,
+            });
+        }
+
         let mut all_files = Vec::new();
 
         for spec in &mut specs {
+            // Skip entire spec if its root is under an excluded path
+            if exclude_paths.iter().any(|ex| path_under(ex, &spec.path)) {
+                continue;
+            }
             if !spec.path.exists() {
                 continue;
             }
             spec.excludes.extend(extra_excludes.iter().cloned());
             let files = scan_dir(&spec.path, &spec.excludes, &spec.mode);
-            all_files.extend(files);
+            // Filter out individual files that fall under an excluded path
+            for f in files {
+                if !exclude_paths.iter().any(|ex| path_under(ex, &f)) {
+                    all_files.push(f);
+                }
+            }
         }
 
         all_files.sort();
@@ -45,26 +69,6 @@ impl BackupPaths {
     fn build_specs(&self) -> Vec<DirSpec> {
         let h = &self.home;
         let mut specs = Vec::new();
-
-        // ~/work/hermes-agent
-        specs.push(DirSpec {
-            path: h.join("work/hermes-agent"),
-            excludes: vec![
-                "venv".into(), ".venv".into(), "node_modules".into(),
-                "__pycache__".into(), ".git/objects".into(),
-            ],
-            mode: ScanMode::Full,
-        });
-
-        // ~/work/openclaw
-        specs.push(DirSpec {
-            path: h.join("work/openclaw"),
-            excludes: vec![
-                "node_modules".into(), "__pycache__".into(),
-                ".git/objects".into(), "dist".into(),
-            ],
-            mode: ScanMode::Full,
-        });
 
         // ~/.hermes (everything)
         specs.push(DirSpec {
@@ -230,4 +234,9 @@ fn scan_selective(base: &Path, excludes: &[String], subdirs: &[String]) -> Vec<P
 fn path_matches_exclude(rel: &str, exclude: &str) -> bool {
     // Match if any path component sequence matches the exclude pattern
     rel.contains(exclude)
+}
+
+/// Returns true if `target` equals `base` or is a descendant of `base`.
+fn path_under(base: &Path, target: &Path) -> bool {
+    target.starts_with(base)
 }
